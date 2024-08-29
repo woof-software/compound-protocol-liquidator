@@ -29,13 +29,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
     error InvalidPoolConfig(address swapToken, PoolConfig poolConfig);
     error Unauthorized();
 
-    /** Events **/
-    event Absorb(address indexed initiator, address[] accounts);
-    event AbsorbWithoutBuyingCollateral();
-    event BuyAndSwap(address indexed tokenIn, address indexed tokenOut, uint256 baseAmountPaid, uint256 assetBalance, uint256 amountOut);
-    event Pay(address indexed token, address indexed payer, address indexed recipient, uint256 value);
-    event Swap(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, PoolConfig poolConfig);
-
     enum Exchange {
         Uniswap,
         SushiSwap,
@@ -76,9 +69,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
 
     /// @notice The scale for asset price calculations
     uint256 public constant QUOTE_PRICE_SCALE = 1e18;
-
-    /// @notice The asset pool configurations
-    mapping(address => PoolConfig) public poolConfigs;
 
     /**
      * @notice Construct a new liquidator instance
@@ -132,7 +122,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
 
         // Absorb Comet underwater accounts
         CometInterface(comet).absorb(msg.sender, liquidatableAccounts);
-        emit Absorb(msg.sender, liquidatableAccounts);
 
         uint256 flashLoanAmount = 0;
         uint256[] memory assetBaseAmounts = new uint256[](assets.length);
@@ -151,7 +140,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
 
         // if there is nothing to buy, just absorb the accounts
         if (flashLoanAmount == 0) {
-            emit AbsorbWithoutBuyingCollateral();
             return;
         }
 
@@ -225,16 +213,12 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
 
             CometInterface(flashCallbackData.comet).buyCollateral(asset, 0, assetBaseAmount, address(this));
 
-            uint256 assetBalance = ERC20(asset).balanceOf(address(this));
-
             uint256 amountOut = swapCollateral(
                 flashCallbackData.comet,
                 asset,
                 assetBaseAmount,
                 flashCallbackData.poolConfigs[i]
             );
-
-            emit BuyAndSwap(asset, baseToken, assetBaseAmount, assetBalance, amountOut);
 
             totalAmountOut += amountOut;
         }
@@ -252,7 +236,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
         // Repay the loan
         if (totalAmountOwed > 0) {
             pay(baseToken, address(this), msg.sender, totalAmountOwed);
-            emit Pay(baseToken, address(this), msg.sender, totalAmountOwed);
         }
 
         uint256 remainingBalance = ERC20(baseToken).balanceOf(address(this));
@@ -261,21 +244,14 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
         if (remainingBalance > 0) {
             TransferHelper.safeApprove(baseToken, address(this), remainingBalance);
             pay(baseToken, address(this), recipient, remainingBalance);
-            emit Pay(baseToken, address(this), recipient, remainingBalance);
         }
     }
 
-    /**
-     * @dev Returns lesser of two values
-     */
-    function min(uint256 a, uint256 b) internal view returns (uint256) {
-        return a <= b ? a : b;
-    }
 
-    function purchasableBalanceOfAsset(address comet, address asset, uint maxCollateralToPurchase) internal returns (uint256, uint256) {
+    function purchasableBalanceOfAsset(address comet, address asset, uint maxCollateralToPurchase) internal view returns (uint256, uint256) {
         uint256 collateralBalance = CometInterface(comet).getCollateralReserves(asset);
 
-        collateralBalance = min(collateralBalance, maxCollateralToPurchase);
+        collateralBalance = collateralBalance <= maxCollateralToPurchase ? collateralBalance : maxCollateralToPurchase;
 
         uint256 baseScale = CometInterface(comet).baseScale();
 
@@ -337,7 +313,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
                     sqrtPriceLimitX96: 0
                 })
             );
-            emit Swap(asset, WETH9, swapAmount, swapAmountNew, poolConfig);
             swapAmount = swapAmountNew;
             swapToken = WETH9;
             poolFee = 500; // XXX move into constant
@@ -365,8 +340,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
         if (amountOut < amountOutMin) {
             revert InsufficientAmountOut(swapToken, baseToken, swapAmount, amountOut, amountOutMin, poolConfig);
         }
-
-        emit Swap(swapToken, baseToken, swapAmount, amountOut, poolConfig);
 
         return amountOut;
     }
@@ -412,8 +385,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
         if (amountOut < amountOutMin) {
             revert InsufficientAmountOut(swapToken, baseToken, swapAmount, amountOut, amountOutMin, poolConfig);
         }
-
-        emit Swap(swapToken, baseToken, swapAmount, amountOut, poolConfig);
 
         return amountOut;
     }
@@ -472,8 +443,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
             revert InsufficientAmountOut(swapToken, baseToken, swapAmount, amountOut, amountOutMin, poolConfig);
         }
 
-        emit Swap(swapToken, baseToken, swapAmount, amountOut, poolConfig);
-
         return amountOut;
     }
 
@@ -528,8 +497,6 @@ contract OnChainLiquidator is IUniswapV3FlashCallback, PeripheryImmutableState, 
             amountOut = IWETH9(WETH9).balanceOf(address(this));
             tokenOut = WETH9;
         }
-
-        emit Swap(tokenIn, tokenOut, swapAmount, amountOut, poolConfig);
 
         return amountOut;
     }
