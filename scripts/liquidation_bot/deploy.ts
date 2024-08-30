@@ -41,6 +41,22 @@ const addresses: {[network: string]: LiquidationAddresses} = {
     stakedNativeToken: ethers.constants.AddressZero,
     weth9: '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
     wrappedStakedNativeToken: ethers.constants.AddressZero
+  },
+  optimism: {
+    ...sharedAddresses,  
+    sushiswapRouter: ethers.constants.AddressZero,
+    stakedNativeToken: ethers.constants.AddressZero,
+    weth9: '0x4200000000000000000000000000000000000006',
+    wrappedStakedNativeToken: ethers.constants.AddressZero
+  },
+  base: {
+    balancerVault: sharedAddresses.balancerVault,
+    uniswapRouter: '0x2626664c2603336E57B271c5C0b26F421741e481',
+    uniswapV3Factory: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD',  
+    sushiswapRouter: ethers.constants.AddressZero,
+    stakedNativeToken: ethers.constants.AddressZero,
+    weth9: '0x4200000000000000000000000000000000000006',
+    wrappedStakedNativeToken: ethers.constants.AddressZero
   }
 };
 
@@ -48,7 +64,7 @@ async function main() {
   const network = hre.network.name;
   const deployment = 'abc'; // doesn't matter; just need a value to instantiate DeploymentManager
 
-  if (!['mainnet', 'polygon', 'arbitrum'].includes(network)) {
+  if (!['mainnet', 'polygon', 'arbitrum', 'base', 'optimism'].includes(network)) {
     throw new Error(`unable to deploy Liquidator to network: ${network}`);
   }
 
