@@ -74,7 +74,7 @@ async function main() {
     hre,
     {
       writeCacheToDisk: false,
-      verificationStrategy: 'eager'
+      verificationStrategy: 'none'
     }
   );
   await dm.spider();
